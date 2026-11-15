@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 
 from .adapter import AdapterUnavailable, LlmVisionAdapter
 from .api import async_register_views
@@ -14,6 +15,8 @@ from .images import ImageManager
 from .memory import MemoryManager
 from .migration import async_migrate_ring_training
 from .store import TrainerStore
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 @dataclass
