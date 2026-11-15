@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LLM Vision Trainer",
+        "description": "Configure the event source used by the trainer.",
+        "data": {
+          "source_integration": "Source integration"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one instance is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Training options",
+        "data": {
+          "max_examples": "Maximum examples per label"
+        }
+      }
+    }
+  }
+}

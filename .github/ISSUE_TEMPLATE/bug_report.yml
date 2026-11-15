@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible LLM Vision Trainer problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove tokens, private images, addresses, and `.storage` contents before posting."
+  - type: input
+    id: ha
+    attributes: {label: Home Assistant version}
+    validations: {required: true}
+  - type: input
+    id: llmv
+    attributes: {label: LLM Vision version}
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Reproduction steps}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Redacted logs}
