@@ -26,6 +26,15 @@ class TrainerStore:
     async def snapshot(self) -> dict[str, Any]:
         async with self._lock: return deepcopy(await self._load_locked())
 
+    async def candidate_for(self, event_id: str) -> dict[str, Any] | None:
+        """Return a candidate without changing queue/classification state."""
+        async with self._lock:
+            data = await self._load_locked()
+            candidate = data["candidates"].get(event_id)
+            if candidate is None:
+                candidate = (data["classifications"].get(event_id) or {}).get("candidate")
+            return deepcopy(candidate) if candidate else None
+
     async def upsert_candidates(self, items: list[dict[str, Any]]) -> None:
         async with self._lock:
             data = await self._load_locked()

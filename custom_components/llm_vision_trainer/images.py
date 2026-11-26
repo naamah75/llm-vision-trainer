@@ -38,3 +38,12 @@ class ImageManager:
         response = web.FileResponse(path, headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
         response.content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         return response
+
+    def path(self, image_id: str) -> Path:
+        """Return a validated Trainer-owned image path."""
+        if Path(image_id).name != image_id or Path(image_id).suffix.lower() not in ALLOWED_IMAGE_SUFFIXES:
+            raise FileNotFoundError(image_id)
+        path = (self.root / image_id).resolve()
+        if not path.is_relative_to(self.root.resolve()) or not path.is_file():
+            raise FileNotFoundError(image_id)
+        return path

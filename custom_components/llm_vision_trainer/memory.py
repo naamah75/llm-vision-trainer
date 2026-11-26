@@ -36,6 +36,90 @@ class MemoryManager:
         self._storage = Path(hass.config.path(".storage"))
         self._backup_dir = self._storage / MEMORY_BACKUP_DIR
         self._quarantine_dir = self._storage / MEMORY_QUARANTINE_DIR
+        self._llm_memory_dir = Path(hass.config.path("www", "llmvision", "memory"))
+
+    async def promote(self, event_id: str, label: str, description: str, source: Path) -> dict[str, Any]:
+        """Copy one confirmed example into LLM Vision memory, transactionally."""
+        if not event_id or not re.fullmatch(r"[A-Za-z0-9_-]+", event_id):
+            raise MemoryError("ID evento non valido")
+        if not label or not re.fullmatch(r"[a-z0-9_-]+", label):
+            raise MemoryError("Etichetta non valida")
+        source = source.resolve()
+        if not source.is_file() or source.suffix.lower() not in ALLOWED_IMAGE_SUFFIXES:
+            raise MemoryError("Immagine Trainer non disponibile")
+        async with self._lock:
+            entry, snap = self._read()
+            self._validate(snap)
+            original = deepcopy(snap)
+            marker = f"trainer_{label}_{event_id}"
+            existing = next((p for p in snap["memory_paths"] if marker in Path(str(p)).stem), None)
+            if existing:
+                return {"status": "exists", "path": str(existing), "created": False}
+            suffix = source.suffix.lower()
+            target = self._llm_memory_dir / f"{marker}{suffix}"
+            encoded = None
+            if snap["images"]:
+                encoded = await self.hass.async_add_executor_job(self._encode_image, source)
+            await self.hass.async_add_executor_job(self._copy_new, source, target)
+            snap["memory_paths"].append(str(target))
+            snap["memory_strings"].append(str(description).strip()[:4096])
+            if snap["images"]:
+                snap["images"].append(encoded)
+            try:
+                await self._commit(entry, snap, "training", original)
+            except Exception:
+                await self.hass.async_add_executor_job(self._unlink_if_exists, target)
+                raise
+            return {"status": "ok", "path": str(target), "created": True,
+                    "rollback": {"entry_id": entry.entry_id, "path": str(target), "before": original}}
+
+    async def rollback_promotion(self, receipt: dict[str, Any]) -> None:
+        """Compensate a completed promotion if local classification persistence fails."""
+        if not receipt.get("created") or not receipt.get("rollback"):
+            return
+        async with self._lock:
+            rollback = receipt["rollback"]
+            entry, current = self._read()
+            target = str(rollback["path"])
+            if entry.entry_id != rollback["entry_id"] or target not in current["memory_paths"]:
+                raise MemoryConflict("Impossibile annullare il training: memoria modificata nel frattempo")
+            index = current["memory_paths"].index(target)
+            restored = deepcopy(current)
+            restored["memory_paths"].pop(index)
+            restored["memory_strings"].pop(index)
+            if restored["images"]:
+                restored["images"].pop(index)
+            await self._commit(entry, restored, "training-rollback", current)
+            await self.hass.async_add_executor_job(self._unlink_if_exists, Path(target))
+
+    @staticmethod
+    def _copy_new(source: Path, target: Path) -> None:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            raise MemoryConflict("Esempio di training già presente")
+        temp = target.with_name(f".{target.name}.tmp")
+        shutil.copy2(source, temp)
+        os.replace(temp, target)
+
+    @staticmethod
+    def _unlink_if_exists(path: Path) -> None:
+        try: path.unlink()
+        except FileNotFoundError: pass
+
+    @staticmethod
+    def _encode_image(source: Path) -> str:
+        """Match LLM Vision's 512px JPEG memory cache format."""
+        from PIL import Image
+        import io
+        with Image.open(source) as image:
+            image.load()
+            width, height = image.size
+            ratio = width / height
+            size = (512, int(512 / ratio)) if ratio > 1 else (int(512 * ratio), 512)
+            image = image.resize(size)
+            if image.mode != "RGB": image = image.convert("RGB")
+            output = io.BytesIO(); image.save(output, format="JPEG")
+            return base64.b64encode(output.getvalue()).decode("ascii")
 
     @staticmethod
     def _id(index: int, path: str) -> str:

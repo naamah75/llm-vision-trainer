@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.2
+
+- Promote confirmed classifications into LLM Vision memory with backup-before-write and rollback.
+- Keep candidates queued when memory promotion fails.
+- Make Lovelace custom-element registration idempotent.
+
 All notable changes are documented here. This project follows Semantic Versioning.
 
 ## [0.1.0-beta.1] - Unreleased

@@ -16,5 +16,5 @@
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/naamah75/llm-vision-trainer/issues",
-  "version": "0.1.0-beta.1"
+  "version": "0.1.0-beta.2"
 }

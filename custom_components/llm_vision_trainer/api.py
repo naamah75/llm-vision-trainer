@@ -31,8 +31,23 @@ class ClassificationView(HomeAssistantView):
         except Exception: return error(self, "Corpo JSON non valido")
         label = str(payload.get("label", "")).strip().lower()
         if label not in DEFAULT_LABELS: return error(self, "Etichetta non valida")
-        saved = await runtime(request).store.classify(str(event_id), label)
-        return self.json({"classification": saved}) if saved else error(self, "Evento candidato non trovato", 404)
+        rt = runtime(request)
+        candidate = await rt.store.candidate_for(str(event_id))
+        if candidate is None: return error(self, "Evento candidato non trovato", 404)
+        image_id = str(candidate.get("image_id") or "")
+        try:
+            source = rt.images.path(image_id)
+            human = DEFAULT_LABELS[label]
+            description = human if label == "non_corriere" else f"Corriere {human}"
+            promotion = await rt.memory.promote(str(event_id), label, description, source)
+            try:
+                saved = await rt.store.classify(str(event_id), label)
+            except Exception:
+                await rt.memory.rollback_promotion(promotion)
+                raise
+            return self.json({"classification": saved, "memory": {k: v for k, v in promotion.items() if k != "rollback"}})
+        except (FileNotFoundError, MemoryError, MemoryConflict) as err:
+            return error(self, f"Training non completato: {err}", 409)
     async def delete(self, request, event_id):
         requeue = request.query.get("requeue", "1") not in {"0", "false"}
         ok = await runtime(request).store.remove_classification(str(event_id), requeue)
